@@ -22,7 +22,9 @@ So in the example, the result would be `'a1,b1,c1'`. **Do this as succinctly as 
 ​
 You can type the solution here:
 ```javascript
-// your solution here
+const inputArr = ['a', 'b', 'c', 'D']
+let finalArr = inputArr.filter(character =>  character == character.toLowerCase()).map(character=> character = character +'1')
+console.log('finalArr: ', finalArr);
 ```
 ​
 ### 1.2 Algorithm: Connections
@@ -77,12 +79,49 @@ Name and explain the time and space complexity.
 You can use the template below:
 ​
 ```typescript
-const calculateStats = (events: ConnectionEvent[]): SessionStats => {
-    // calculate the stats here and return them
-    // return stats;
-​
-    throw new Error('not implemented');
-};
+// add npm package to calculate date things named: moment
+  calculateStats(events: ConnectionEvent[]) {
+    // we assume that events sort by timestamp -1
+    try {
+      let finalStats = {
+        numConnectionStarts: 0,
+        numUniqueUsers: 0,
+        numMaxUsers: 0
+      }
+      if (events && events.length > 0) {
+        // The number of connections that were initiated (started)
+        let getConnectedUser = events.filter(e => event.etype && event.etype === 'connected')
+        finalStats.numConnectionStarts = getConnectedUser.length;
+
+        // The number of unique users that were connected
+        const uniqueByUser = [...new Set(getConnectedUser.map(event => event.userId))];
+        finalStats.numUniqueUsers = uniqueByUser.length;
+
+        // add 10 min to current timestamp (i.e., 'A' user connected 2:30 then we check is there any user that connected between 2:30 to 2:40 ). 
+        let connectedSimultaneously = [];
+        const minutes = 10;
+        events.forEach(event => {
+          if (event.etype) {
+            let startDate = moment(event.timestamp).toISOString()
+            let endDate = moment(event.timestamp).add(minutes, 'minutes').toISOString()
+            let findUser = events.filter(ev => {
+              return moment(moment(ev.timestamp).toISOString()).isSame(startDate) || moment(ev.timestamp).isBetween(startDate, endDate);
+            })
+            if (findUser && findUser.length > 1) {
+              connectedSimultaneously = [...new Set([...connectedSimultaneously, ...findUser])]
+            }
+          }
+        })
+        finalStats.numMaxUsers = connectedSimultaneously.length;
+
+        return finalStats
+      } else {
+        return finalStats;
+      }
+    } catch (e) {
+      throw new Error('not implemented');
+    }
+  }
 ```
 ​
 ## 2. Systems Design Tasks
@@ -97,24 +136,30 @@ There are two scenarios:
 Please list 2 approaches on how to make the endpoint faster for the first scenario and 1 approach for the second scenario (i.e., 3 approaches in total).
 **If any conditions need to be met in order for your approaches to be viable, please name them**.
 ​
-You can use the space below:
+You can use the space below.  
 ​
 **Approaches in Scenario 1**:
-1. ...
-2. ...
+1. If there is complex database queries that takes some time to give response then we can use "Indexes" mechanism to perform query faster. Or If we already use this mechanism then DB Indexes do not have in proper way.
+2. Sometime API enpoint have some special task like sending as email then we can use other third party service like Redis. So we just focus on the main task and we give response to request (Without waiting to the other task that definitely will done when made request).  
+
 ​
 **Approach in Scenario 2**:
-1. ....
+1. Sometime user internet speed also affect slow for application performance. Also database server CPU and Size also affect the slow query performance.
 ​
 ### 2.2 Databases: 2 Queries
 Imagine you have two SQL queries A and B. A must happen before B. If any of the two queries fail, the whole query should fail and none of the changes of either A or B should be applied to the database. Write one or multiple SQL statements that achieve this task. A and B have already been added below:
 ```sql
--- perform A
-A;
-​
--- perform B
-B;
+we can achieve this using rollback/manual-rollback functionality. If any query fails all other previously query will roll back
+BEGIN TRANSACTION
+ 
+  Query A;
+ 
+  Query B;
+
+ 
+COMMIT TRANSACTION
 ```
+
 ​
 ### 2.3 AWS Architecture Design
 In this task, assume the PLAYSPORTS API is currently deployed from some single self-hosted server that sits in our CEO's basement (hint: this is actually not the case).
@@ -135,3 +180,23 @@ Keep in mind the following system requirements:
 * You may use any AWS service like EC2, RDS, ECS, Lambda, ...
 * If you are making any assumptions, please note them explicitly.
 * Please describe your architecture using full sentences and not just keywords. You can provide a diagram as well.
+
+***We can manage AWS Architecture Design things as per below***
+
+***Stack***
+* We can use NodeJS + ExpressJS + TypeScript and ESLint + Prettier for coding standard and formatting.
+* Database can be either MySQL or MongoDB. 
+
+***Data storing***
+* Approach 1: We can use replica to store important data, once those information has been stored into our replica then only we will store into our main database otherwise that transaction will be rolled back.
+* Approach 2: We can add Read replica for our AWS configuration which will be automatically synchronizing the replicas from the main instance.
+* For getting more speedy response we can set up Redis server, which will provide response directly whenever same request being made so in that case we can reduce extra overload on API server.
+
+***API hosting***
+* NodeJS can be hosted on AWS EC2
+
+***Load Balancing / Scaling***
+* Our server configurations may be proper for ideal cases but on some days if traffic increases then for short duration we should not increase capacity permanently. In such cases we can opt for either load balancer or dynamic scaling service by AWS, load balancer would add another EC2 instance based on the traffic load calculation and decrease once we get back to normal routine traffic whereas dynamic scaling will try to increase and decrease the capacity of the existing cpu itself.
+
+***Deployment***
+* We can add CI/CD configuration YAML file to enable continuous integration and deployment of our code, based on the rules added in YAML file it will run the scripts once we made commit into our repository. We can define what needs to be done on success or failure of scripts to avoid server crashes.
